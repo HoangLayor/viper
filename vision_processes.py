@@ -3,6 +3,7 @@ This is the script that contains the backend code. No need to look at this to im
 Functions that run separate processes. These processes run on GPUs, and are queried by processes running only CPUs
 """
 
+import logging
 import dill
 import inspect
 import queue
@@ -173,12 +174,21 @@ else:
     consumers = dict()
 
     counter_ = 0
+    print("-"*10)
+    print(list_models)
+    print("-"*10)
     for model_class_ in list_models:
         for process_name_ in model_class_.list_processes():
             if process_name_ in config.load_models and config.load_models[process_name_]:
+                print(f'Loading {process_name_} model')
                 consumers[process_name_] = make_fn(model_class_, process_name_, counter_)
                 counter_ += 1
-
+    print(consumers)
+    print(consumers.keys())
+    try:
+        print(consumers['codex'].__dict__)
+    except KeyError:
+        pass
     queues_in = None
 
     def finish_all_consumers():

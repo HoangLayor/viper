@@ -1,0 +1,9 @@
+import logging
+
+# Cấu hình logging
+logging.basicConfig(
+    filename='/teamspace/studios/this_studio/viper/logs/.log',             # Tên file log
+    level=logging.INFO,             # Mức độ log: DEBUG, INFO, WARNING, ERROR, CRITICAL
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
