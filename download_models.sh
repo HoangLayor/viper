@@ -15,7 +15,7 @@ gdown "https://drive.google.com/u/0/uc?id=1bv6_pZOsXW53EhlwU0ZgSk03uzFI61pN" -O 
 
 # TCL model
 mkdir -p $PRETRAINED_MODELS_PATH/TCL
-gdown "https://drive.google.com/uc?id=1Cb1azBdcdbm0pRMFs-tupKxILTCXlB4O" -O $PRETRAINED_MODELS_PATH/TCL/TCL_4M.pth
+gdown "https://drive.google.com/uc?id=1eHinvFP7TnZYAL2Ft-M8rPott7mpVN2R" -O $PRETRAINED_MODELS_PATH/TCL/TCL_4M.pth
 
 # InSPyReNet model
 mkdir -p $PRETRAINED_MODELS_PATH/saliency_inspyrenet_plus_ultra
