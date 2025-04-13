@@ -32,7 +32,7 @@ mp.set_start_method('spawn', force=True)
 from vision_processes import forward, finish_all_consumers  # This import loads all the models. May take a while
 from image_patch import *
 from video_segment import *
-from datasets.dataset import MyDataset
+from datasets.my_dataset import MyDataset
 
 console = Console(highlight=False, force_terminal=False)
 
@@ -255,11 +255,15 @@ def load_image(path):
 def get_code(query):
     model_name_codex = 'codellama' if config.codex.model == 'codellama' else 'codex'
     code = forward(model_name_codex, prompt=query, input_type="image")
-    if config.codex.model not in ('gpt-3.5-turbo', 'gpt-4'):
+    if config.codex.model not in ('gpt-3.5-turbo', 'gpt-4', 'gpt-4o'):
         code = f'def execute_command(image, my_fig, time_wait_between_lines, syntax):' + code # chat models give execute_command due to system behaviour
+    
     code_for_syntax = code.replace("(image, my_fig, time_wait_between_lines, syntax)", "(image)")
     syntax_1 = Syntax(code_for_syntax, "python", theme="monokai", line_numbers=True, start_line=0)
     console.print(syntax_1)
+    code = code.strip("`").strip()
+    if code.startswith("python"):
+        code = "\n".join(code.split("\n")[1:])  # Bỏ dòng "python" sau ```
     code = ast.unparse(ast.parse(code))
     code_for_syntax_2 = code.replace("(image, my_fig, time_wait_between_lines, syntax)", "(image)")
     syntax_2 = Syntax(code_for_syntax_2, "python", theme="monokai", line_numbers=True, start_line=0)
