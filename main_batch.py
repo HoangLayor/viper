@@ -20,6 +20,14 @@ from tqdm import tqdm
 from configs import config
 from utils import seed_everything
 import datasets
+from logger_config import setup_logger
+
+# Setup logger
+log_file = os.path.join(config.log_dir, f'.log')
+if not os.path.exists(config.log_dir):
+    os.makedirs(config.log_dir)
+logger = setup_logger('main_batch', log_file, level=config.log_level)
+
 
 # See https://github.com/pytorch/pytorch/issues/11201, https://github.com/pytorch/pytorch/issues/973
 # Not for dataloader, but for multiprocessing batches
@@ -46,12 +54,23 @@ def run_program(parameters, queues_in_, input_type_, retrying=False):
 
     code, sample_id, image, possible_answers, query = parameters
 
+    code = code.strip("`").strip()
+    if code.startswith("python"):
+        code = "\n".join(code.split("\n")[1:])
+    
+    logger.info(f'Running sample {sample_id}...')
+    # print(f'Code: {code}')
+    # # print(f'Image: {image}')
+    # print(f'Possible answers: {possible_answers}')
+    # print(f'Query: {query}')
+
     code_header = f'def execute_command_{sample_id}(' \
                   f'{input_type_}, possible_answers, query, ' \
                   f'ImagePatch, VideoSegment, ' \
                   'llm_query, bool_to_yesno, distance, best_image_match):\n' \
                   f'    # Answer is:'
     code = code_header + code
+    logger.info(f'Code after header: {code}')
 
     try:
         exec(compile(code, 'Codex', 'exec'), globals())
@@ -60,7 +79,7 @@ def run_program(parameters, queues_in_, input_type_, retrying=False):
         try:
             with open(config.fixed_code_file, 'r') as f:
                 fixed_code = f.read()
-            code = code_header + fixed_code 
+            code = code_header + fixed_code
             exec(compile(code, 'Codex', 'exec'), globals())
         except Exception as e2:
             print(f'Not even the fixed code worked. Sample {sample_id} failed at compilation time with error: {e2}')
@@ -160,6 +179,7 @@ def main():
             if config.multiprocessing else open(os.devnull, "w") as pool:
         try:
             n_batches = len(dataloader)
+            print(f'Number of batches: {n_batches}')
 
             for i, batch in tqdm(enumerate(dataloader), total=n_batches):
 

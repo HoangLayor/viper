@@ -34,7 +34,7 @@ class MyDataset(Dataset):
         self.max_num_frames = max_num_frames
 
         # Load questions, answers, and image ids
-        with open(self.data_path / self.split / 'queries.csv', 'r') as f:
+        with open(self.data_path / 'usable_data.csv', 'r') as f:
             # The csv has the rows [query, answer, image_name or video_name]
             self.df = pd.read_csv(f, index_col=None, keep_default_na=False)
 
@@ -44,7 +44,7 @@ class MyDataset(Dataset):
         self.n_samples = len(self.df)
 
     def get_sample_path(self, index):
-        sample_name = self.df.iloc[index][f"{self.input_type}_name"]
+        sample_name = self.df.iloc[index][f"{self.input_type}_name"] # f"{self.input_type}_name"
         sample_path = self.data_path / f"{self.input_type}s" / sample_name
         return sample_path
 
@@ -81,6 +81,9 @@ class MyDataset(Dataset):
 
         out_dict["image"] = image
         out_dict["index"] = index
+        out_dict['possible_answers'] = []
+        out_dict['query_type'] = -1
+        out_dict['question'] = out_dict['query']
 
         if 'extra_context' not in out_dict:
             out_dict['extra_context'] = ''
