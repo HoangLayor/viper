@@ -1,20 +1,20 @@
-multiprocessing: False                              # Run the models and samples in parallel
+multiprocessing: True                              # Run the models and samples in parallel
 path_pretrained_models: './pretrained_models'       # Path to the pretrained models
-execute_code: False                                 # Execute the code after generating it. Only applies to main_batch
+execute_code: True                                 # Execute the code after generating it. Only applies to main_batch
 
 dataset:                                            # Dataset configuration
     dataset_name: 'MyDataset'                       # Dataset name
     data_path: 'data'                               # Dataset path
     split: ''                                       # Dataset split. If '', it assumes there is only one split
     max_samples:                                    # Maximum number of samples to load
-    batch_size: 20                                  # Batch size
+    batch_size: 16                                  # Batch size
     start_sample: 0                                 # Start sample index. Only used if max_samples is not None
 
 load_models:                                        # Which pretrained models to load
-    maskrcnn: False
-    clip: False
+    maskrcnn: True
+    clip: True
     glip: True
-    owlvit: False
+    owlvit: True
     tcl: False
     gpt3_qa: True
     gpt3_general: True
@@ -45,19 +45,20 @@ gpt3:                                               # GPT-3 configuration
     qa_prompt: ./prompts/gpt3/gpt3_qa.txt
     guess_prompt: ./prompts/gpt3/gpt3_process_guess.txt
     temperature: 0.                                 # Temperature for GPT-3. Almost deterministic if 0
-    model: text-davinci-003                         # See openai.Model.list() for available models
+    model: gpt-4o                         # See openai.Model.list() for available models
 
 codex:
     temperature: 0.                                 # Temperature for Codex. (Almost) deterministic if 0
     best_of: 1                                      # Number of tries to choose from. Use when temperature > 0
     max_tokens: 512                                 # Maximum number of tokens to generate for Codex
     prompt: ./prompts/chatapi.prompt                # Codex prompt file, which defines the API. (doesn't support video for now due to token limits)
-    model: gpt-3.5-turbo                            # Codex model to use. [code-davinci-002, gpt-3.5-turbo, gpt-4]. See openai.Model.list() for available models
+    model: gpt-4o                            # Codex model to use. [code-davinci-002, gpt-3.5-turbo, gpt-4]. See openai.Model.list() for available models
 
 # Saving and loading parameters
 save: True                                          # Save the results to a file
 save_new_results: True                              # If False, overwrite the results file
 results_dir: ./results/                             # Directory to save the results
+log_dir: ./logs/                                    # Directory to save the logs
 use_cache: True                                     # Use cache for the models that support it (now, GPT-3)
 clear_cache: False                                  # Clear stored cache
 use_cached_codex: False                             # Use previously-computed Codex results

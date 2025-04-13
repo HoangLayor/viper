@@ -28,6 +28,13 @@ from typing import List, Union
 
 from configs import config
 from utils import HiddenPrints
+from logger_config import setup_logger
+
+# Setup logger
+log_file = os.path.join(config.log_dir, f'.log')
+if not os.path.exists(config.log_dir):
+    os.makedirs(config.log_dir)
+logger = setup_logger('viper', log_file)
 
 with open('api.key') as f:
     openai.api_key = f.read().strip()
@@ -624,7 +631,7 @@ class TCLModel(BaseModel):
         }
 
         text_encoder = 'bert-base-uncased'
-        checkpoint_path = f'{config.path_pretrained_models}/TCL_4M.pth'
+        checkpoint_path = f"./pretrained_models/TCL/TCL_4M.pth"
 
         self.tokenizer = BertTokenizer.from_pretrained(text_encoder)
 
@@ -877,17 +884,19 @@ class GPT3Model(BaseModel):
             response = [r["text"] for r in response['choices']]
         return response
 
-    def query_gpt3(self, prompt, model="text-davinci-003", max_tokens=16, logprobs=None, stream=False,
+    def query_gpt3(self, prompt, model="gpt-4o-2024-11-20", max_tokens=16, logprobs=None, stream=False,
                    stop=None, top_p=1, frequency_penalty=0, presence_penalty=0):
-        if model == "chatgpt":
+        if model == "gpt-4o":
             messages = [{"role": "user", "content": p} for p in prompt]
+            logger.info("----- Calling gpt-4o -----")
             response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
+                engine="gpt-4o-2024-11-20",
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=self.temperature,
             )
         else:
+            logger.info("----- Calling gpt3 -----")
             response = openai.Completion.create(
                 model=model,
                 prompt=prompt,
@@ -901,6 +910,8 @@ class GPT3Model(BaseModel):
                 presence_penalty=presence_penalty,
                 n=self.n_votes,
             )
+        logger.info(f"Response: {response['choices'][0]['message']['content']}")
+        logger.info("----- Finished -----")
         return response
 
     def forward(self, prompt, process_name):
@@ -1004,13 +1015,56 @@ def codex_helper(extended_prompt):
     return resp
 
 
+# Setup Azure OpenAI client
+openai.api_type = "azure"
+openai.api_base = config.azure.api_base
+openai.api_version = config.azure.api_version
+openai.api_key = config.azure.api_key
+
+@backoff.on_exception(backoff.expo, Exception, max_tries=10)
+def codex_helper_azure(extended_prompts):
+    assert 0 <= config.codex.temperature <= 1
+    assert 1 <= config.codex.best_of <= 20
+
+    if not isinstance(extended_prompts, list):
+        extended_prompts = [extended_prompts]
+
+    responses = []
+    for prompt in extended_prompts:
+        logger.info("----- Calling codex -----")
+        response = openai.ChatCompletion.create(
+            engine=config.azure.deployment_name,
+            messages=[
+                {"role": "system", "content": "Only answer with a function starting def execute_command."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=config.codex.temperature,
+            max_tokens=config.codex.max_tokens,
+            top_p=1.0,
+            frequency_penalty=0,
+            presence_penalty=0,
+            stop=["\n\n"],
+        )
+        content = response['choices'][0]['message']['content']
+        replace_header = "execute_command(image, my_fig, time_wait_between_lines, syntax)"
+
+        logger.info(f"Response: {response['choices'][0]['message']['content']}")
+        logger.info("----- Finished -----")
+
+        responses.append(content.replace(
+            "execute_command(image)",
+            replace_header
+        ))
+    # if len(responses) == 1:
+    #     return responses[0]
+    return responses
+
 class CodexModel(BaseModel):
     name = 'codex'
     requires_gpu = False
     max_batch_size = 5
 
     # Not batched, but every call will probably be a batch (coming from the same process)
-
     def __init__(self, gpu_number=0):
         super().__init__(gpu_number=gpu_number)
         with open(config.codex.prompt) as f:
@@ -1021,32 +1075,28 @@ class CodexModel(BaseModel):
                 self.fixed_code = f.read()
 
     def forward(self, prompt, input_type='image', prompt_file=None, base_prompt=None, extra_context=None):
-        if config.use_fixed_code:  # Use the same program for every sample, like in socratic models
+        if config.use_fixed_code:
             return [self.fixed_code] * len(prompt) if isinstance(prompt, list) else self.fixed_code
 
-        if prompt_file is not None and base_prompt is None:  # base_prompt takes priority
+        if prompt_file and not base_prompt:
             with open(prompt_file) as f:
                 base_prompt = f.read().strip()
         elif base_prompt is None:
             base_prompt = self.base_prompt
 
         if isinstance(prompt, list):
-            extended_prompt = [base_prompt.replace("INSERT_QUERY_HERE", p).
-                               replace('INSERT_TYPE_HERE', input_type).
-                               replace('EXTRA_CONTEXT_HERE', str(ec))
+            extended_prompt = [base_prompt.replace("INSERT_QUERY_HERE", p)
+                                            # .replace("INSERT_TYPE_HERE", input_type)
+                                            # .replace("EXTRA_CONTEXT_HERE", str(ec))
                                for p, ec in zip(prompt, extra_context)]
         elif isinstance(prompt, str):
-            extended_prompt = [base_prompt.replace("INSERT_QUERY_HERE", prompt).
-                               replace('INSERT_TYPE_HERE', input_type).
-                               replace('EXTRA_CONTEXT_HERE', extra_context)]
+            extended_prompt = [base_prompt.replace("INSERT_QUERY_HERE", prompt)]
+                                            # .replace("INSERT_TYPE_HERE", input_type)
+                                            # .replace("EXTRA_CONTEXT_HERE", extra_context)]
         else:
-            raise TypeError("prompt must be a string or a list of strings")
+            raise TypeError("prompt must be a string or list of strings")
 
-        result = self.forward_(extended_prompt)
-        if not isinstance(prompt, list):
-            result = result[0]
-
-        return result
+        return self.forward_(extended_prompt)
 
     def forward_(self, extended_prompt):
         if len(extended_prompt) > self.max_batch_size:
@@ -1055,7 +1105,7 @@ class CodexModel(BaseModel):
                 response += self.forward_(extended_prompt[i:i + self.max_batch_size])
             return response
         try:
-            response = codex_helper(extended_prompt)
+            return codex_helper_azure(extended_prompt)
         except openai.error.RateLimitError as e:
             print("Retrying Codex, splitting batch")
             if len(extended_prompt) == 1:
@@ -1171,13 +1221,14 @@ class BLIPModel(BaseModel):
         with warnings.catch_warnings(), HiddenPrints("BLIP"), torch.cuda.device(self.dev):
             max_memory = {gpu_number: torch.cuda.mem_get_info(self.dev)[0]}
 
-            self.processor = Blip2Processor.from_pretrained(f"Salesforce/{blip_v2_model_type}")
+            self.processor = Blip2Processor.from_pretrained(f"Salesforce/{blip_v2_model_type}", use_fast=True,)
             # Device_map must be sequential for manual GPU selection
             try:
                 self.model = Blip2ForConditionalGeneration.from_pretrained(
-                    f"Salesforce/{blip_v2_model_type}", load_in_8bit=half_precision,
+                    f"Salesforce/{blip_v2_model_type}", load_in_8bit=False,
                     torch_dtype=torch.float16 if half_precision else "auto",
-                    device_map="sequential", max_memory=max_memory
+                    device_map="sequential", max_memory=max_memory,
+                    
                 )
             except Exception as e:
                 # Clarify error message. The problem is that it tries to load part of the model to disk.
